@@ -1,0 +1,21 @@
+# Secrets
+.env
+*.key
+*.pem
+*.crt
+
+# Local configs
+config.local.py
+settings.local.py
+
+# Databases
+*.db
+*.sqlite
+*.sqlite3
+
+# Logs
+logs/
+*.log
+
+myenv
+__pycache__
