@@ -40,7 +40,7 @@ You should care deeply about at least one.
 
 ---
 
-### DFIR Track — Forensics & Reconstruction
+### DFIR Track: Forensics & Reconstruction
 
 Focus areas:
 
@@ -61,7 +61,7 @@ If you think in terms of investigations, not tools, this track is for you.
 
 ---
 
-### Research Track — Reasoning & Modeling
+### Research Track: Reasoning & Modeling
 
 Focus areas:
 
@@ -82,7 +82,7 @@ If you care about *how machines can assist investigation thinking*, this track i
 
 ---
 
-### Engineering Track — Systems & Platform
+### Engineering Track: Systems & Platform
 
 Focus areas:
 
