@@ -1,5 +1,5 @@
 from datetime import timedelta
-from app.incident_builder import infer_stage_from_model
+from incidents.builder import infer_stage_from_model
 
 COMPRESSION_WINDOW = timedelta(seconds=2)
 IMPORTANT_THRESHOLD = 5

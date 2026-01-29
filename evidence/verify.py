@@ -1,4 +1,4 @@
-from app.evidence_chain import compute_hash
+from evidence.chain import compute_hash
 
 def verify_incident(events):
     if not events:

@@ -1,13 +1,14 @@
 from fastapi import FastAPI
-from app.database import init_db, SessionLocal
-from app.wazuh_client import WazuhClient
-from app.normalizer import normalize
-from app.evidence_chain import compute_hash
-from app.models import EvidenceEvent
-from app.incident_builder import build_incidents, generate_narrative, infer_stage_from_dict
-from app.event_compressor import compress_events
-from app.evidence_verifier import verify_incident
-from app.storyline_builder import build_storylines
+from evidence.store import init_db, SessionLocal
+from collectors.wazuh import WazuhClient
+from normalization.wazuh import normalize
+from evidence.chain import compute_hash
+from core.models.evidence import EvidenceEvent
+from incidents.builder import build_incidents, infer_stage_from_dict
+from timelines.compression import compress_events
+from evidence.verify import verify_incident
+from correlation.storylines import build_storylines
+from synthesis.narrative import generate_narrative
 import uuid
 import os
 
