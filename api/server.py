@@ -10,7 +10,7 @@ def investigate():
     result = run_investigation()
     return {
         "run_id": result.run_id,
-        "evidence_count": result.evidence_count,
+        "evidence_count": result.evidence_summary.total_events,
         "incidents": result.incidents,
         "timelines": result.timelines,
         "storylines": result.storylines,

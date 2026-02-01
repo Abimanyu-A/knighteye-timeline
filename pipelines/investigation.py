@@ -7,56 +7,25 @@ from evidence.chain import compute_hash
 from evidence.verify import verify_incident
 from evidence.store import EvidenceStore
 from core.models.evidence import EvidenceEvent
+from core.models.investigation import (
+    InvestigationResult,
+    EvidenceSummary,
+    IncidentSummary,
+    TimelineResult,
+    StorylineResult,
+    NarrativeResult,
+    VerificationResult,
+)
 from incidents.builder import build_incidents, infer_stage_from_dict
 from timelines.compression import compress_events
 from correlation.storylines import build_storylines
 from synthesis.narrative import generate_narrative
 
 
-class InvestigationResult:
-    def __init__(self):
-        self.run_id = str(uuid.uuid4())
-        self.started_at = datetime.utcnow()
+def run_investigation() -> InvestigationResult:
+    run_id = str(uuid.uuid4())
+    started_at = datetime.utcnow()
 
-        self.evidence_count = 0
-        self.incidents = []
-        self.timelines = []
-        self.storylines = []
-        self.narratives = []
-        self.verification = None
-
-def reconstruct_from_evidence(events):
-    
-    incidents = build_incidents(events)
-
-    timelines = []
-    storylines = []
-    narratives = []
-
-    for inc in incidents:
-        timeline = compress_events(inc["events"])
-        timelines.append(timeline)
-
-        sl = build_storylines(timeline)
-        storylines.extend(sl)
-
-        narratives.append(
-            generate_narrative(timeline, sl)
-        )
-
-    verification = verify_incident(events)
-
-    return {
-        "incidents": incidents,
-        "timelines": timelines,
-        "storylines": storylines,
-        "narratives": narratives,
-        "verification": verification
-    }
-
-def run_investigation():
-
-    result = InvestigationResult()
     store = EvidenceStore()
     collector = WazuhCollector()
 
@@ -67,8 +36,6 @@ def run_investigation():
     since_id = last_event.wazuh_id if last_event else None
 
     raw_events, _, _ = collector.fetch_since(since_ts, since_id)
-
-    stored = 0
 
     for hit in raw_events:
         alert = hit["_source"]
@@ -87,50 +54,190 @@ def run_investigation():
             **ev,
             prev_hash=prev_hash,
             current_hash=current_hash,
-            session_id=result.run_id
+            session_id=run_id,
         )
 
         store.add(record)
-
         prev_hash = current_hash
-        stored += 1
-
-    result.evidence_count = stored
 
     events = store.fetch_all_ordered()
+    store.close()
+
+    # ------------------------------------------------------------------
+    # Evidence summary
+    # ------------------------------------------------------------------
+
+    systems = sorted({e.system for e in events})
+    start_time = events[0].timestamp if events else None
+    end_time = events[-1].timestamp if events else None
+
+    evidence_summary = EvidenceSummary(
+        total_events=len(events),
+        systems_involved=systems,
+        start_time=start_time,
+        end_time=end_time,
+    )
+
+    # ------------------------------------------------------------------
+    # Incidents, timelines, storylines, narratives
+    # ------------------------------------------------------------------
+
+    incident_summaries = []
+    timeline_results = []
+    storyline_results = []
+    narrative_results = []
 
     incidents = build_incidents(events)
 
-    timelines = []
-    storylines = []
-    narratives = []
-
     for inc in incidents:
+        incident_id = inc["incident_id"]
+
+        incident_summaries.append(
+            IncidentSummary(
+                incident_id=incident_id,
+                start_time=inc["start_time"],
+                end_time=inc["end_time"],
+                systems=sorted(inc["systems"]),
+                event_count=len(inc["events"]),
+            )
+        )
+
         timeline = compress_events(inc["events"])
-        timelines.append(timeline)
-        storylines.extend(build_storylines(timeline))
-        narratives.append(generate_narrative(timeline, storylines))
+        timeline_results.append(
+            TimelineResult(
+                incident_id=incident_id,
+                events=timeline,
+            )
+        )
+
+        storylines = build_storylines(timeline)
+        for sl in storylines:
+            storyline_results.append(
+                StorylineResult(
+                    storyline_id=sl["storyline_id"],
+                    systems=sorted(sl["systems"]),
+                    steps=sl["steps"],
+                    confidence=sl["confidence"],
+                )
+            )
+
+        narrative_results.append(
+            NarrativeResult(
+                incident_id=incident_id,
+                text=generate_narrative(timeline, storylines),
+            )
+        )
+
+    # ------------------------------------------------------------------
+    # Verification
+    # ------------------------------------------------------------------
 
     verification = verify_incident(events)
 
-    store.close()
+    verification_result = VerificationResult(
+        valid=verification["valid"],
+        checked_events=verification["checked_events"],
+        message=verification["message"],
+    )
 
-    recon = reconstruct_from_evidence(events)
+    # ------------------------------------------------------------------
+    # Final, frozen result
+    # ------------------------------------------------------------------
 
-    result.incidents = recon["incidents"]
-    result.timelines = recon["timelines"]
-    result.storylines = recon["storylines"]
-    result.narratives = recon["narratives"]
-    result.verification = recon["verification"]
+    return InvestigationResult(
+        run_id=run_id,
+        started_at=started_at,
+        evidence_summary=evidence_summary,
+        incidents=incident_summaries,
+        timelines=timeline_results,
+        storylines=storyline_results,
+        narratives=narrative_results,
+        verification=verification_result,
+    )
 
-    return result
 
-def replay_investigation():
-    """
-    Read-only reconstruction from existing evidence.
-    No collectors. No hashing. No DB writes.
-    """
+def replay_investigation() -> InvestigationResult:
     store = EvidenceStore()
     events = store.fetch_all_ordered()
+    store.close()
 
-    return reconstruct_from_evidence(events)
+    # Deterministic replay uses the same construction path
+    # but skips collection/storage
+    run_id = "REPLAY"
+    started_at = datetime.utcnow()
+
+    systems = sorted({e.system for e in events})
+    start_time = events[0].timestamp if events else None
+    end_time = events[-1].timestamp if events else None
+
+    evidence_summary = EvidenceSummary(
+        total_events=len(events),
+        systems_involved=systems,
+        start_time=start_time,
+        end_time=end_time,
+    )
+
+    incident_summaries = []
+    timeline_results = []
+    storyline_results = []
+    narrative_results = []
+
+    incidents = build_incidents(events)
+
+    for inc in incidents:
+        incident_id = inc["incident_id"]
+
+        incident_summaries.append(
+            IncidentSummary(
+                incident_id=incident_id,
+                start_time=inc["start_time"],
+                end_time=inc["end_time"],
+                systems=sorted(inc["systems"]),
+                event_count=len(inc["events"]),
+            )
+        )
+
+        timeline = compress_events(inc["events"])
+        timeline_results.append(
+            TimelineResult(
+                incident_id=incident_id,
+                events=timeline,
+            )
+        )
+
+        storylines = build_storylines(timeline)
+        for sl in storylines:
+            storyline_results.append(
+                StorylineResult(
+                    storyline_id=sl["storyline_id"],
+                    systems=sorted(sl["systems"]),
+                    steps=sl["steps"],
+                    confidence=sl["confidence"],
+                )
+            )
+
+        narrative_results.append(
+            NarrativeResult(
+                incident_id=incident_id,
+                text=generate_narrative(timeline, storylines),
+            )
+        )
+
+    verification = verify_incident(events)
+
+    verification_result = VerificationResult(
+        valid=verification["valid"],
+        checked_events=verification["checked_events"],
+        message=verification["message"],
+    )
+
+    return InvestigationResult(
+        run_id=run_id,
+        started_at=started_at,
+        evidence_summary=evidence_summary,
+        incidents=incident_summaries,
+        timelines=timeline_results,
+        storylines=storyline_results,
+        narratives=narrative_results,
+        verification=verification_result,
+    )
