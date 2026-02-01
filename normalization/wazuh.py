@@ -14,7 +14,7 @@ def normalize(alert):
         or data.get("host")
         or data.get("computer_name")
         or data.get("win", {}).get("system", {}).get("computer")
-        or agent.get("name")                           # fallback: wazuh agent
+        or agent.get("name")                           # fallback
         or "unknown"
     )
 

@@ -22,6 +22,8 @@ class EvidenceEvent(Base):
     target = Column(String)
     raw_log = Column(Text)
     severity = Column(String)
+    
+    collector = Column(String)
 
     prev_hash = Column(String)
     current_hash = Column(String)

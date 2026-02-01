@@ -13,6 +13,7 @@ def verify_incident(events):
     for idx, ev in enumerate(events):
         event_dict = {
             "system": ev.system,
+            "collector": ev.collector,
             "system_type": ev.system_type,
             "source_ip": ev.source_ip,
             "actor": ev.actor,
