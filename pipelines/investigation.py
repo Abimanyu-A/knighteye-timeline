@@ -9,7 +9,7 @@ from collectors.wazuh import WazuhClient
 from normalization.wazuh import normalize
 from evidence.chain import compute_hash
 from evidence.verify import verify_incident
-from evidence.store import SessionLocal
+from evidence.store import EvidenceStore
 from core.models.evidence import EvidenceEvent
 from incidents.builder import build_incidents, infer_stage_from_dict
 from timelines.compression import compress_events
@@ -33,7 +33,7 @@ class InvestigationResult:
 def run_investigation():
 
     result = InvestigationResult()
-    session = SessionLocal()
+    store = EvidenceStore()
 
     wazuh = WazuhClient(
         base_url=os.getenv("WAZUH_URL"),
@@ -42,9 +42,7 @@ def run_investigation():
         verify_ssl=False
     )
 
-    last_event = session.query(EvidenceEvent)\
-        .order_by(EvidenceEvent.timestamp.desc())\
-        .first()
+    last_event = store.get_last_event()
 
     prev_hash = last_event.current_hash if last_event else "GENESIS"
     last_ts = last_event.wazuh_timestamp if last_event else "1970-01-01T00:00:00Z"
@@ -70,10 +68,7 @@ def run_investigation():
             ev = normalize(alert)
             ev["stage"] = infer_stage_from_dict(ev)
 
-            exists = session.query(EvidenceEvent)\
-                .filter(EvidenceEvent.wazuh_id == ev["wazuh_id"])\
-                .first()
-            if exists:
+            if store.exists(ev["wazuh_id"]):
                 continue
 
             current_hash = compute_hash(prev_hash, ev)
@@ -85,8 +80,7 @@ def run_investigation():
                 session_id=result.run_id
             )
 
-            session.add(record)
-            session.commit()
+            store.add(record)
 
             prev_hash = current_hash
             stored += 1
@@ -96,9 +90,7 @@ def run_investigation():
 
     result.evidence_count = stored
 
-    events = session.query(EvidenceEvent)\
-        .order_by(EvidenceEvent.timestamp)\
-        .all()
+    events = store.fetch_all_ordered()
 
     incidents = build_incidents(events)
 
@@ -114,7 +106,7 @@ def run_investigation():
 
     verification = verify_incident(events)
 
-    session.close()
+    store.close()
 
     result.incidents = incidents
     result.timelines = timelines
