@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from pipelines.investigation import run_investigation
+from pipelines.investigation import run_investigation, replay_investigation
 from evidence.store import init_db
 
 app = FastAPI()
@@ -17,3 +17,7 @@ def investigate():
         "narratives": result.narratives,
         "verification": result.verification
     }
+    
+@app.get("/replay")
+def replay():
+    return replay_investigation()

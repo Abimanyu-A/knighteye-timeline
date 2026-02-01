@@ -25,6 +25,34 @@ class InvestigationResult:
         self.narratives = []
         self.verification = None
 
+def reconstruct_from_evidence(events):
+    
+    incidents = build_incidents(events)
+
+    timelines = []
+    storylines = []
+    narratives = []
+
+    for inc in incidents:
+        timeline = compress_events(inc["events"])
+        timelines.append(timeline)
+
+        sl = build_storylines(timeline)
+        storylines.extend(sl)
+
+        narratives.append(
+            generate_narrative(timeline, sl)
+        )
+
+    verification = verify_incident(events)
+
+    return {
+        "incidents": incidents,
+        "timelines": timelines,
+        "storylines": storylines,
+        "narratives": narratives,
+        "verification": verification
+    }
 
 def run_investigation():
 
@@ -87,10 +115,22 @@ def run_investigation():
 
     store.close()
 
-    result.incidents = incidents
-    result.timelines = timelines
-    result.storylines = storylines
-    result.narratives = narratives
-    result.verification = verification
+    recon = reconstruct_from_evidence(events)
+
+    result.incidents = recon["incidents"]
+    result.timelines = recon["timelines"]
+    result.storylines = recon["storylines"]
+    result.narratives = recon["narratives"]
+    result.verification = recon["verification"]
 
     return result
+
+def replay_investigation():
+    """
+    Read-only reconstruction from existing evidence.
+    No collectors. No hashing. No DB writes.
+    """
+    store = EvidenceStore()
+    events = store.fetch_all_ordered()
+
+    return reconstruct_from_evidence(events)
